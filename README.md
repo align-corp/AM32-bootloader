@@ -3,6 +3,20 @@ AM32 Bootloader
 
 This is the bootloader for the AM32 project
 
+Align
+-----
+
+As per default AM32 bootloader behavior, a valid CAN message is needed to jump to APP.
+In this fork that check is removed, so if firmware is valid the bootloader will immediately
+jump to app, without waiting for a valid CAN message.
+This is needed to play the startup sound as soon as ESC is turned ON, to signal user that
+the drone is turned ON successfully, so he can release the power button.
+
+To compile bootloader for Align L431 CAN run
+```
+make AM32_L431_BOOTLOADER_PA2_CAN
+```
+
 Installing Build Tools
 ----------------------
 
