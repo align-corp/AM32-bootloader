@@ -786,7 +786,7 @@ bool DroneCAN_update()
       request_DNA();
     }
     sys_can_enable_IRQ();
-    return false;
+    return DroneCAN_boot_ok();
   }
 
   const uint64_t ts = micros64();
@@ -881,11 +881,6 @@ bool DroneCAN_boot_ok(void)
     return false;
   }
 #endif
-
-  if (!have_raw_command) {
-    set_reason(FAIL_REASON_BAD_CRC, "no signal");
-    return false;
-  }
 
   node_status.vendor_specific_status_code = CHECK_FW_OK;
 
