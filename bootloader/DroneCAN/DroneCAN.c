@@ -6,6 +6,7 @@
 
 #if DRONECAN_SUPPORT
 
+#include "targets.h"   // must precede blutil.h: provides BOARD_FLASH_SIZE
 #include <version.h>
 #include <eeprom.h>
 #include <stdarg.h>
@@ -41,16 +42,6 @@
 
 static CanardInstance canard;
 static uint8_t canard_memory_pool[CANARD_POOL_SIZE];
-
-#ifndef MCU_FLASH_START
-#define MCU_FLASH_START 0x08000000
-#endif
-
-#if BOARD_FLASH_SIZE == 128
-#define EEPROM_START_ADD (MCU_FLASH_START+0x1f800)
-#else
-#error "Only 128K flash size supported for DroneCAN"
-#endif
 
 /*
   keep the state for firmware update
@@ -88,8 +79,18 @@ enum boot_code {
   FAIL_REASON_NO_SIGNAL = 19,
 };
 
+// app signature magic words (overridable per-board in targets.h)
+#ifndef APP_SIGNATURE_MAGIC1
 #define APP_SIGNATURE_MAGIC1 0x68f058e6
+#endif
+#ifndef APP_SIGNATURE_MAGIC2
 #define APP_SIGNATURE_MAGIC2 0xafcee5a0
+#endif
+
+// string the application signature mcu[] must match (defaults to AM32_MCU)
+#ifndef BOARD_SIGNATURE_ID
+#define BOARD_SIGNATURE_ID AM32_MCU
+#endif
 
 /*
   application signature
@@ -142,15 +143,6 @@ static uint32_t millis32(void)
   return micros64() / 1000ULL;
 }
 
-/*
-  default settings, based on public/assets/eeprom_default.bin in AM32 configurator
- */
-static const uint8_t default_settings[] = {
-  0x01, 0x02, BOOTLOADER_VERSION, 0x01, 0x23, 0x4e, 0x45, 0x4f, 0x45, 0x53, 0x43, 0x20, 0x66, 0x30, 0x35, 0x31,
-  0x20, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x02, 0x18, 0x64, 0x37, 0x0e, 0x00, 0x00, 0x05, 0x00,
-  0x80, 0x80, 0x80, 0x32, 0x00, 0x32, 0x00, 0x00, 0x0f, 0x0a, 0x0a, 0x8d, 0x66, 0x06, 0x00, 0x00
-};
-
 #if DRONECAN_CHECK_SIGNATURE
 // crc32 implementation, slow method for small flash cost
 static uint32_t crc32(const uint8_t *buf, uint32_t size)
@@ -202,14 +194,8 @@ static void handle_param_ExecuteOpcode(CanardInstance* ins, CanardRxTransfer* tr
   struct uavcan_protocol_param_ExecuteOpcodeResponse pkt;
   memset(&pkt, 0, sizeof(pkt));
 
+  // no settings storage on this board: opcodes are not supported
   pkt.ok = false;
-
-  if (req.opcode == UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_REQUEST_OPCODE_ERASE) {
-    can_print("resetting to defaults");
-    save_flash_nolib(default_settings, sizeof(default_settings), EEPROM_START_ADD);
-    pkt.ok = true;
-  }
-
 
   uint8_t buffer[UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_RESPONSE_MAX_SIZE];
   uint16_t total_size = uavcan_protocol_param_ExecuteOpcodeResponse_encode(&pkt, buffer);
@@ -740,14 +726,7 @@ static void DroneCAN_Startup(void)
     }
   }
 
-  if (node_id == 0) {
-    // check for valid node ID in settings
-    const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
-    if (eeprom[0] == 1 && eeprom[176] <= 127) {
-      node_id = eeprom[176];
-    }
-  }
-
+  // node_id stays 0 when not forced via RTC: use dynamic node allocation
   canardSetLocalNodeID(&canard, node_id);
 
   // initialise low level CAN peripheral hardware
@@ -866,7 +845,7 @@ bool DroneCAN_boot_ok(void)
     set_reason(FAIL_REASON_BAD_LENGTH_APP, "bad app length");
     return false;
   }
-  if (memcmp(AM32_MCU, appsig->mcu, strlen(AM32_MCU)) != 0) {
+  if (memcmp(BOARD_SIGNATURE_ID, appsig->mcu, strlen(BOARD_SIGNATURE_ID)) != 0) {
     set_reason(FAIL_REASON_BAD_BOARD_ID, "bad board type");
     return false;
   }
@@ -883,15 +862,6 @@ bool DroneCAN_boot_ok(void)
 #endif
 
   node_status.vendor_specific_status_code = CHECK_FW_OK;
-
-  const uint8_t eeprom_magic = *(uint8_t*)(EEPROM_START_ADD);
-  if (eeprom_magic == 0 || eeprom_magic == 0xff) {
-      can_print("resetting to defaults");
-      save_flash_nolib(default_settings, sizeof(default_settings), EEPROM_START_ADD);
-  }
-  if (eeprom_magic != 0x01) {
-    set_reason(FAIL_REASON_BAD_FIRMWARE_SIGNATURE, "bad eeprom header");
-  }
 
   return true;
 }

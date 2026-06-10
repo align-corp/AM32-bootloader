@@ -62,8 +62,11 @@ BIN_DIR := $(ROOT)/$(OBJ)
 # find the SVD files
 $(foreach MCU,$(MCU_TYPES),$(eval SVD_$(MCU) := $(wildcard $(HAL_FOLDER_$(MCU))/*.svd)))
 
-.PHONY : clean all
-all : check_tools bootloaders
+.PHONY : clean all boards
+# this is now a DroneCAN-only bootloader: the default build produces the
+# board targets (see BOARD_BUILDS). The legacy MCU x PIN `bootloaders`
+# targets still exist but only the DroneCAN (_CAN) ones compile.
+all : check_tools boards
 
 # Check if tools are installed
 check_tools:
@@ -211,6 +214,57 @@ BLU_BUILDS := $(BLU_BUILDS) $(BLU_TARGET)
 endef
 
 $(foreach BUILD,$(MCU_BUILDS),$(foreach PIN,$(BOOTLOADER_PINS),$(eval $(call CREATE_BOOTLOADER_TARGET,$(BUILD),$(PIN)))))
+
+# -----------------------------------------------------------------------------
+# DroneCAN-only board targets (e.g. `make M460_PCU`).
+#
+# A board maps to an existing MCU HAL plus a -DBOARD_<name> define; all the
+# rest of the board configuration (flash size, app-signature magic, board id)
+# lives in Inc/targets.h. These builds are DroneCAN-only (no serial comms pin)
+# and produce a bootloader image only (the updater is built via `updaters`).
+# -----------------------------------------------------------------------------
+
+# board name -> MCU HAL to reuse
+BOARD_BUILDS := M460_PCU
+BOARD_MCU_M460_PCU := L431
+
+BOARD_TARGETS :=
+
+define CREATE_BOARD_TARGET
+$(eval BOARD := $(1))
+$(eval MCU := $(BOARD_MCU_$(1)))
+$(eval B_ELF := $(BIN_DIR)/$(IDENTIFIER)_$(BOARD)_BOOTLOADER_V$(BOOTLOADER_VERSION).elf)
+$(eval B_HEX := $(B_ELF:.elf=.hex))
+$(eval B_BIN := $(B_ELF:.elf=.bin))
+$(eval B_DEP := $(B_ELF:.elf=.d))
+
+$(eval xCC := $(if $($(MCU)_CC),$($(MCU)_CC),$(CC)))
+$(eval xOBJCOPY := $(if $($(MCU)_OBJCOPY),$($(MCU)_OBJCOPY),$(OBJCOPY)))
+
+-include $(B_DEP)
+
+$(B_ELF): CFLAGS_BOARD := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DDRONECAN_SUPPORT=1 -DBOARD_$(BOARD) -DAM32_MCU=\"$(MCU)\" $$(CFLAGS_DRONECAN_$(MCU))
+$(B_ELF): LDFLAGS_BOARD := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(LDSCRIPT_BL_CAN)
+$(B_ELF): $$(SRC_$(MCU)_BL) $$(SRC_BL) $$(SRC_DRONECAN_$(MCU))
+	$$(QUIET)echo building DroneCAN bootloader for board $(BOARD) with MCU $(MCU)
+	$$(QUIET)$$(MKDIR) -p $(OBJ)
+	$$(QUIET)echo Compiling $(notdir $(B_ELF))
+	$$(QUIET)$(xCC) $$(CFLAGS_BOARD) $$(LDFLAGS_BOARD) -MMD -MP -MF $(B_DEP) -o $$@ $$(SRC_$(MCU)_BL) $$(SRC_BL) $$(SRC_DRONECAN_$(MCU))
+
+$(B_HEX): $(B_ELF)
+	$$(QUIET)echo Generating $(notdir $$@)
+	$$(QUIET)$(xOBJCOPY) -O binary $$(<) $(B_BIN)
+	$$(QUIET)$(xOBJCOPY) $$(<) -O ihex $$@
+
+$(BOARD): $(B_HEX)
+.PHONY: $(BOARD)
+
+BOARD_TARGETS := $(BOARD_TARGETS) $(BOARD)
+endef
+
+$(foreach b,$(BOARD_BUILDS),$(eval $(call CREATE_BOARD_TARGET,$(b))))
+
+boards: $(BOARD_TARGETS)
 
 bootloaders: $(ALL_BUILDS)
 

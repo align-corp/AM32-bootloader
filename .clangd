@@ -1,0 +1,65 @@
+# clangd configuration for the DroneCAN-only bootloader (STM32L431 / M460_PCU).
+#
+# There is no compile_commands.json in this repo, so these flags mirror the
+# `make M460_PCU` board build (Makefile CREATE_BOARD_TARGET + l431makefile.mk +
+# CFLAGS_BASE) so the language server resolves headers, macros and the ARM
+# target correctly. Adjust `Compiler:` if your arm-none-eabi-gcc lives elsewhere.
+CompileFlags:
+  # point clangd at the cross toolchain so it picks up the arm-none-eabi
+  # system headers (stdint.h, etc.) and the bare-metal target.
+  Compiler: /Applications/Arm/bin/arm-none-eabi-gcc
+  Add:
+    # parse as bare-metal ARM, otherwise clang uses the host target, rejects
+    # -mcpu=cortex-m4 and then fails to load <stdint.h> (uint32_t errors).
+    - --target=arm-none-eabi
+    - -mcpu=cortex-m4
+    - -mthumb
+    - -ffreestanding
+
+    # --- build / board selection (CREATE_BOARD_TARGET) ---
+    - -DBOOTLOADER
+    - -DBOARD_M460_PCU
+    - -DDRONECAN_SUPPORT=1
+    - -DAM32_MCU="L431"
+    # note: BL_DEFINES_SYSTEM is intentionally NOT set here - main.c defines it
+    # itself, and setting it globally causes a macro-redefined warning.
+
+    # --- L431 HAL defines (l431makefile.mk) ---
+    - -DSTM32L431xx
+    - -DMCU_L431
+    - -DUSE_FULL_LL_DRIVER
+    - -DHSE_VALUE=8000000
+    - -DHSE_STARTUP_TIMEOUT=100
+    - -DLSE_STARTUP_TIMEOUT=5000
+    - -DLSE_VALUE=32768
+    - -DLSI_VALUE=32000
+    - -DHSI_VALUE=16000000
+    - -DVDD_VALUE=3300
+    - -DDATA_CACHE_ENABLE=1
+    - -DINSTRUCTION_CACHE_ENABLE=0
+    - -DPREFETCH_ENABLE=1
+
+    # --- include paths ---
+    # absolute: clangd resolves relative -I against each file's directory, not
+    # the repo root, so relative paths silently miss for files under bootloader/.
+    - -I/Users/luca/code/AM32-bootloader/Inc
+    - -I/Users/luca/code/AM32-bootloader/Mcu/l431/Inc
+    - -I/Users/luca/code/AM32-bootloader/Mcu/l431/Drivers/STM32L4xx_HAL_Driver/Inc
+    - -I/Users/luca/code/AM32-bootloader/Mcu/l431/Drivers/CMSIS/Include
+    - -I/Users/luca/code/AM32-bootloader/Mcu/l431/Drivers/CMSIS/Device/ST/STM32L4xx/Include
+    - -I/Users/luca/code/AM32-bootloader/bootloader/DroneCAN
+    - -I/Users/luca/code/AM32-bootloader/bootloader/DroneCAN/libcanard
+    - -I/Users/luca/code/AM32-bootloader/bootloader/DroneCAN/dsdl_generated/include
+
+  # strip GCC-only flags that clang's parser doesn't understand (in case a
+  # compile_commands.json is generated later, e.g. with bear).
+  Remove:
+    - -fsingle-precision-constant
+    - --specs=*
+    - -mfp16-format=*
+    - -Werror
+
+Diagnostics:
+  # embedded HAL headers trip these up; quiet the noise
+  UnusedIncludes: None
+  MissingIncludes: None

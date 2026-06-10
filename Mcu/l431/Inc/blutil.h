@@ -135,12 +135,13 @@ static inline void bl_clock_config(void)
   LL_RCC_SetAPB2Prescaler(LL_RCC_APB2_DIV_1);
 }
 
-#ifdef PORT_LETTER
 static inline void bl_gpio_init(void)
 {
   LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
   LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOB);
+#ifdef PORT_LETTER
   LL_GPIO_ResetOutputPin(input_port, input_pin);
+#endif
 }
 
 /*
@@ -151,10 +152,18 @@ static inline bool bl_was_software_reset(void)
   return (RCC->CSR & RCC_CSR_SFTRSTF) != 0;
 }
 
+/*
+  Error_Handler and SystemInit have external linkage and so must be
+  emitted in exactly one translation unit. The serial builds own them via
+  PORT_LETTER; the DroneCAN-only bootloader main.c owns them via
+  BL_DEFINES_SYSTEM.
+ */
+#if defined(PORT_LETTER) || defined(BL_DEFINES_SYSTEM)
 void Error_Handler()
 {
   while (1) {}
 }
+#endif
 
 #ifdef FIRMWARE_RELATIVE_START
 /*
@@ -181,6 +190,7 @@ static inline void jump_to_application(void)
 }
 #endif // FIRMWARE_RELATIVE_START
 
+#if defined(PORT_LETTER) || defined(BL_DEFINES_SYSTEM)
 void SystemInit(void)
 {
 #if defined(USER_VECT_TAB_ADDRESS)
@@ -213,4 +223,4 @@ void SystemInit(void)
   LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
   LL_PWR_EnableBkUpAccess();
 }
-#endif // PORT_LETTER
+#endif // PORT_LETTER || BL_DEFINES_SYSTEM
