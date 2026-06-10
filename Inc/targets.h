@@ -21,7 +21,8 @@
 #define BOARD_FLASH_SIZE     128
 #define APP_SIGNATURE_MAGIC1 0x68f058e6
 #define APP_SIGNATURE_MAGIC2 0xafcee5a0
-#define BOARD_SIGNATURE_ID   "L431"
+#define BOARD_SIGNATURE_ID   "L431_PCU"
+#define CAN_NAME "com.align.bl.pcu"
 
 #else
 #error "No board selected - define a BOARD_xxx block in Inc/targets.h and pass -DBOARD_xxx"
