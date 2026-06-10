@@ -246,7 +246,7 @@ static void handle_GetNodeInfo(CanardInstance *ins, CanardRxTransfer *transfer)
 
   sys_can_getUniqueID(pkt.hardware_version.unique_id);
 
-  strncpy((char*)pkt.name.data, "AM32_BOOTLOADER_" AM32_MCU, sizeof(pkt.name.data));
+  strncpy((char*)pkt.name.data, CAN_NAME, sizeof(pkt.name.data));
   pkt.name.len = strnlen((char*)pkt.name.data, sizeof(pkt.name.data));
 
   uint16_t total_size = uavcan_protocol_GetNodeInfoResponse_encode(&pkt, buffer);
