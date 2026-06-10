@@ -57,7 +57,7 @@ struct app_signature {
     uint32_t fwlen;     // total image length in bytes  (filled in post-link)
     uint32_t crc1;      // crc32 of image *before* this struct (filled in post-link)
     uint32_t crc2;      // crc32 of image *after*  this struct (filled in post-link)
-    char     mcu[16];   // must match BOARD_SIGNATURE_ID  ("L431")
+    char     mcu[16];   // must match BOARD_SIGNATURE_ID
     uint32_t unused[2];
 };
 ```
@@ -89,7 +89,7 @@ Validation performed by `DroneCAN_boot_ok()`:
    } app_signature __attribute__((section(".app_signature"), used)) = {
      .magic1 = 0x68f058e6,
      .magic2 = 0xafcee5a0,
-     .mcu    = "L431",
+     .mcu    = BOARD_SIGNATURE_ID, // check in targets.h
    };
    ```
 
@@ -163,7 +163,7 @@ is enough to make it stay and wait for a `BeginFirmwareUpdate` request.
 - [ ] Linked at `0x08004000`, image ≤ 110 KB.
 - [ ] Valid Cortex-M vector table (SP in SRAM, reset vector in app flash) at base.
 - [ ] `.app_signature` struct embedded, within first 110 KB, 4-byte aligned,
-      `magic1/magic2` set, `mcu[] = "L431"`.
+      `magic1/magic2` set, `mcu[] = BOARD_SIGNATURE_ID`.
 - [ ] `fwlen/crc1/crc2` stamped post-link (or bootloader built with
       `DRONECAN_CHECK_SIGNATURE=0` during bring-up).
 - [ ] Application configures its own clocks on startup.
